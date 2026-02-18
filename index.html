@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Waar is Jeffrey?</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/panzoom@9.4.3/dist/panzoom.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d0d0d;--gold:#c4a35a;--gold-light:#e8d5a3;--red:#8b2020;--text:#e8e0d0}
+body{background:var(--bg);color:var(--text);font-family:'Georgia',serif;overflow:hidden;height:100vh;width:100vw;-webkit-tap-highlight-color:transparent}
+h1,h2,h3,.title-font{font-family:'Playfair Display',serif}
+
+/* Canvas texture overlay */
+body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;
+background-image:url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+opacity:0.4}
+
+/* Screens */
+.screen{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:1}
+.screen.active{display:flex}
+
+/* INTRO */
+#intro{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;
+background:radial-gradient(ellipse at center,#1a1510 0%,#0d0d0d 70%)}
+#intro h1{font-size:clamp(2.5rem,8vw,5rem);color:var(--gold);letter-spacing:0.05em;margin-bottom:0.5rem;
+text-shadow:0 0 40px rgba(196,163,90,0.3)}
+#intro .subtitle{font-size:clamp(1rem,3vw,1.5rem);color:var(--gold-light);opacity:0.8;margin-bottom:2rem;font-style:italic}
+#intro .disclaimer{font-size:0.75rem;color:#666;max-width:400px;margin-top:2rem;line-height:1.5}
+
+.btn{font-family:'Playfair Display',serif;background:transparent;color:var(--gold);border:2px solid var(--gold);
+padding:1rem 2.5rem;font-size:1.1rem;cursor:pointer;letter-spacing:0.1em;transition:all 0.3s;text-transform:uppercase}
+.btn:hover,.btn:active{background:var(--gold);color:var(--bg)}
+.btn-small{padding:0.5rem 1rem;font-size:0.8rem}
+
+/* Difficulty select */
+.difficulty-select{display:flex;gap:1rem;margin:1.5rem 0;flex-wrap:wrap;justify-content:center}
+.diff-btn{padding:0.6rem 1.5rem;font-size:0.9rem;border:1px solid var(--gold);background:transparent;color:var(--gold);
+cursor:pointer;font-family:'Playfair Display',serif;transition:all 0.3s;opacity:0.6}
+.diff-btn.selected{opacity:1;background:var(--gold);color:var(--bg)}
+
+/* GAME */
+#game{flex-direction:column;background:var(--bg)}
+.game-hud{position:absolute;top:0;left:0;right:0;z-index:100;display:flex;justify-content:space-between;
+align-items:center;padding:0.8rem 1.2rem;background:linear-gradient(to bottom,rgba(13,13,13,0.95),transparent);pointer-events:none}
+.game-hud>*{pointer-events:auto}
+.hud-score,.hud-timer,.hud-found{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold)}
+.hud-timer{font-size:1.4rem;font-weight:700}
+.hud-timer.urgent{color:#ff4444;animation:pulse 0.5s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:0.5}}
+
+.painting-info{position:absolute;bottom:0;left:0;right:0;z-index:100;text-align:center;
+padding:1rem;background:linear-gradient(to top,rgba(13,13,13,0.95),transparent);pointer-events:none}
+.painting-title{font-family:'Playfair Display',serif;font-size:clamp(0.9rem,2.5vw,1.3rem);color:var(--gold-light)}
+.painting-hint{margin-top:0.5rem;pointer-events:auto}
+
+/* Painting container with frame */
+.painting-container{flex:1;display:flex;align-items:center;justify-content:center;padding:3.5rem 1rem;overflow:hidden;position:relative}
+.painting-frame{position:relative;
+box-shadow:0 0 0 4px #8b7332,0 0 0 6px #5a4a20,0 0 0 10px rgba(139,115,50,0.3),
+0 0 30px rgba(0,0,0,0.8),inset 0 0 20px rgba(0,0,0,0.2);
+border:3px solid #a08940;outline:2px solid #6b5a2a}
+.painting-frame img{display:block;max-width:calc(100vw - 2rem);max-height:calc(100vh - 8rem);width:auto;height:auto;cursor:crosshair}
+
+/* Click feedback */
+.click-feedback{position:absolute;width:30px;height:30px;border-radius:50%;transform:translate(-50%,-50%);
+pointer-events:none;z-index:200;animation:clickFade 0.4s forwards}
+.click-feedback.miss{border:2px solid rgba(200,50,50,0.8);background:rgba(200,50,50,0.2)}
+.click-feedback.hit{border:2px solid var(--gold);background:rgba(196,163,90,0.3)}
+@keyframes clickFade{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
+
+/* Found overlay */
+.found-marker{position:absolute;pointer-events:none;z-index:150;border-radius:50%;
+border:3px solid var(--gold);animation:foundPulse 1.5s infinite;
+box-shadow:0 0 20px rgba(196,163,90,0.5),0 0 40px rgba(196,163,90,0.2)}
+@keyframes foundPulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1}50%{transform:translate(-50%,-50%) scale(1.2);opacity:0.7}}
+
+/* REVEAL */
+#reveal{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;
+background:rgba(13,13,13,0.95)}
+#reveal h2{color:var(--gold);font-size:1.8rem;margin-bottom:1rem}
+.reveal-score{font-size:3rem;color:var(--gold-light);font-family:'Playfair Display',serif;margin:0.5rem 0}
+.reveal-fact{max-width:500px;line-height:1.7;margin:1rem 0;color:#bbb;font-style:italic}
+.reveal-breakdown{color:#888;font-size:0.85rem;margin-bottom:1.5rem}
+
+/* END */
+#end{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;
+background:radial-gradient(ellipse at center,#1a1510 0%,#0d0d0d 70%)}
+#end h2{color:var(--gold);font-size:2.5rem;margin-bottom:0.5rem}
+.end-total{font-size:4rem;color:var(--gold-light);font-family:'Playfair Display',serif}
+.end-stats{color:#888;margin:1rem 0 2rem;line-height:2}
+.end-buttons{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+
+/* ABOUT */
+#about{flex-direction:column;align-items:center;padding:2rem;overflow-y:auto;
+background:var(--bg)}
+#about .content{max-width:600px;line-height:1.8}
+#about h2{color:var(--gold);margin:1.5rem 0 0.5rem}
+#about p{color:#999;margin-bottom:1rem}
+#about .back-btn{position:fixed;top:1rem;right:1rem;z-index:100}
+
+/* Transitions */
+.fade-in{animation:fadeIn 0.6s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+
+<!-- INTRO SCREEN -->
+<div id="intro" class="screen active">
+  <h1 class="title-font">Waar is Jeffrey?</h1>
+  <p class="subtitle">Hij was overal. Kun jij hem vinden?</p>
+  
+  <div class="difficulty-select">
+    <button class="diff-btn" data-diff="easy" onclick="setDifficulty('easy',this)">Makkelijk (60s)</button>
+    <button class="diff-btn selected" data-diff="medium" onclick="setDifficulty('medium',this)">Medium (45s)</button>
+    <button class="diff-btn" data-diff="hard" onclick="setDifficulty('hard',this)">Moeilijk (30s)</button>
+  </div>
+  
+  <button class="btn" onclick="startGame()">Begin de zoektocht</button>
+  
+  <p class="disclaimer">
+    Dit is een satirisch kunstproject. Alle schilderijen zijn bewerkt met AI. 
+    <a href="#" onclick="showScreen('about');return false" style="color:var(--gold)">Meer info →</a>
+  </p>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game" class="screen">
+  <div class="game-hud">
+    <div class="hud-score">⭐ <span id="score">0</span></div>
+    <div class="hud-timer" id="timer">45</div>
+    <div class="hud-found"><span id="found-count">0</span>/7</div>
+  </div>
+  
+  <div class="painting-container" id="painting-container">
+    <div class="painting-frame" id="painting-frame">
+      <img id="painting-img" src="" alt="Schilderij" draggable="false">
+    </div>
+  </div>
+  
+  <div class="painting-info">
+    <div class="painting-title" id="painting-title"></div>
+    <div class="painting-hint">
+      <button class="btn btn-small" id="hint-btn" onclick="useHint()">💡 Hint (-10s)</button>
+    </div>
+  </div>
+</div>
+
+<!-- REVEAL SCREEN -->
+<div id="reveal" class="screen">
+  <h2>Gevonden! 🎉</h2>
+  <div class="reveal-score" id="reveal-score">+85</div>
+  <div class="reveal-breakdown" id="reveal-breakdown"></div>
+  <p class="reveal-fact" id="reveal-fact"></p>
+  <button class="btn" onclick="nextLevel()">Volgende →</button>
+</div>
+
+<!-- END SCREEN -->
+<div id="end" class="screen">
+  <h2 class="title-font">Zoektocht Voltooid</h2>
+  <div class="end-total" id="end-total">0</div>
+  <div style="color:var(--gold);margin-bottom:0.5rem">punten</div>
+  <div class="end-stats" id="end-stats"></div>
+  <div class="end-buttons">
+    <button class="btn" onclick="shareScore()">📤 Deel je score</button>
+    <button class="btn" onclick="location.reload()">🔄 Opnieuw</button>
+  </div>
+</div>
+
+<!-- ABOUT SCREEN -->
+<div id="about" class="screen">
+  <button class="btn btn-small back-btn" onclick="showScreen('intro')">← Terug</button>
+  <div class="content" style="padding-top:3rem">
+    <h2>Over dit project</h2>
+    <p>
+      <strong>"Waar is Jeffrey?"</strong> is een satirisch digitaal kunstproject dat de alomtegenwoordigheid 
+      van Jeffrey Epstein in machtkringen visualiseert. Door hem subtiel in historische meesterwerken te 
+      plaatsen, nodigt het spel je uit om na te denken over hoe macht zich door de eeuwen heen verschuilt 
+      in het volle zicht.
+    </p>
+    
+    <h2>De connectie</h2>
+    <p>
+      Jeffrey Epstein onderhield nauwe banden met koninklijke families, presidenten, en andere 
+      machthebbers wereldwijd. Prins Andrew, leden van het Britse koningshuis, en talloze andere 
+      prominenten verschenen op foto's en gastenlijsten naast Epstein — vaak in weelde en pracht 
+      die doet denken aan de banketten en ceremonies uit deze schilderijen.
+    </p>
+    
+    <h2>Bronvermelding schilderijen</h2>
+    <p>
+      🖼 <strong>De Oranjes</strong> — Portret Koninklijke Familie, Tom (privécollectie)<br>
+      🖼 <strong>De Nachtwacht</strong> — Rembrandt van Rijn, 1642 (Rijksmuseum)<br>
+      🖼 <strong>Kroningsbanket George IV</strong> — George Jones, 1821 (Royal Collection Trust)<br>
+      🖼 <strong>School van Athene</strong> — Raphael, 1509-1511 (Vaticaanse Musea)<br>
+      🖼 <strong>Boerenbruiloft</strong> — Pieter Bruegel de Oude, 1567 (Kunsthistorisches Museum)<br>
+      🖼 <strong>Het Laatste Avondmaal</strong> — Leonardo da Vinci, 1495-1498 (Santa Maria delle Grazie)<br>
+      🖼 <strong>Bar bij de Folies-Bergère</strong> — Édouard Manet, 1882 (Courtauld Gallery)
+    </p>
+    
+    <h2>Disclaimer</h2>
+    <p>
+      Dit is een satirisch kunstproject. De bewerkte schilderijen zijn gegenereerd met AI (Krea Nano Banana Pro). 
+      Geen enkel origineel kunstwerk is beschadigd. Het project dient als politiek commentaar en valt onder 
+      het recht op artistieke vrijheid en satire.
+    </p>
+  </div>
+</div>
+
+<script>
+// ===== GAME DATA =====
+const LEVELS = [
+  {
+    id: "oranjes",
+    image: "images/edited/oranjes.jpg",
+    title: "De Oranjes — Koninklijke Familie, 2020s",
+    jeffreyX: 0.85, jeffreyY: 0.32, radius: 0.045,
+    hint: "Zoek rechts boven, tussen de gasten...",
+    funFact: "Epstein bezocht Europa regelmatig en had connecties met meerdere Europese koninklijke families, waaronder het Nederlandse koningshuis via gezamenlijke sociale kringen.",
+    difficulty: "easy"
+  },
+  {
+    id: "nachtwacht",
+    image: "images/edited/night_watch.jpg",
+    title: "De Nachtwacht — Rembrandt, 1642",
+    jeffreyX: 0.82, jeffreyY: 0.42, radius: 0.04,
+    hint: "Zoek in de schaduwen, rechts...",
+    funFact: "De Nachtwacht hangt in het Rijksmuseum — een museum dat Epstein meerdere keren bezocht tijdens zijn reizen naar Amsterdam.",
+    difficulty: "medium"
+  },
+  {
+    id: "banquet",
+    image: "images/edited/george_iv_banquet.jpg",
+    title: "Kroningsbanket George IV — George Jones, 1821",
+    jeffreyX: 0.35, jeffreyY: 0.70, radius: 0.035,
+    hint: "Zoek bij de banktafels, links van het midden...",
+    funFact: "Het Britse koningshuis is nauw verbonden met het Epstein-schandaal. Prins Andrew bezocht Epstein's eiland meerdere keren.",
+    difficulty: "medium"
+  },
+  {
+    id: "athens",
+    image: "images/edited/school_athens.jpg",
+    title: "School van Athene — Raphael, 1511",
+    jeffreyX: 0.08, jeffreyY: 0.55, radius: 0.035,
+    hint: "Zoek links, bij de bogen...",
+    funFact: "Net als de filosofen in dit fresco omringde Epstein zich met intellectuelen en wetenschappers — waaronder Stephen Hawking en Noam Chomsky.",
+    difficulty: "hard"
+  },
+  {
+    id: "wedding",
+    image: "images/edited/peasant_wedding.jpg",
+    title: "Boerenbruiloft — Bruegel, 1567",
+    jeffreyX: 0.75, jeffreyY: 0.40, radius: 0.04,
+    hint: "Zoek rechts, aan het einde van de tafel...",
+    funFact: "Bruegel schilderde het gewone volk, maar Epstein bewoog zich juist in de hoogste kringen — een contrast dat het des te absurder maakt.",
+    difficulty: "hard"
+  },
+  {
+    id: "supper",
+    image: "images/edited/last_supper.jpg",
+    title: "Het Laatste Avondmaal — Da Vinci, 1498",
+    jeffreyX: 0.92, jeffreyY: 0.40, radius: 0.035,
+    hint: "Zoek helemaal rechts, in de schaduw...",
+    funFact: "Zoals Judas aan de tafel zat, zo zat Epstein aan de tafel met de machtigen — verborgen in het volle zicht.",
+    difficulty: "expert"
+  },
+  {
+    id: "bar",
+    image: "images/edited/bar_folies.jpg",
+    title: "Bar bij de Folies-Bergère — Manet, 1882",
+    jeffreyX: 0.65, jeffreyY: 0.25, radius: 0.04,
+    hint: "Zoek in de spiegelreflectie, bovenaan...",
+    funFact: "Manet schilderde de Parijse elite in hun vermaak — precies het milieu waar Epstein zich thuis voelde.",
+    difficulty: "medium"
+  }
+];
+
+// ===== STATE =====
+let state = {
+  difficulty: 'medium',
+  currentLevel: 0,
+  totalScore: 0,
+  foundCount: 0,
+  timer: 45,
+  timerInterval: null,
+  hintUsed: false,
+  panzoomInstance: null,
+  gameActive: false,
+  levelStartTime: 0
+};
+
+const TIMERS = { easy: 60, medium: 45, hard: 30 };
+
+// ===== SCREEN MANAGEMENT =====
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const screen = document.getElementById(id);
+  screen.classList.add('active');
+  screen.classList.add('fade-in');
+  setTimeout(() => screen.classList.remove('fade-in'), 600);
+}
+
+function setDifficulty(diff, btn) {
+  state.difficulty = diff;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+// ===== GAME =====
+function startGame() {
+  state.currentLevel = 0;
+  state.totalScore = 0;
+  state.foundCount = 0;
+  document.getElementById('score').textContent = '0';
+  document.getElementById('found-count').textContent = '0';
+  
+  // Try fullscreen
+  try { document.documentElement.requestFullscreen?.(); } catch(e) {}
+  
+  loadLevel();
+}
+
+function loadLevel() {
+  const level = LEVELS[state.currentLevel];
+  if (!level) { endGame(); return; }
+  
+  showScreen('game');
+  state.hintUsed = false;
+  state.gameActive = false;
+  document.getElementById('hint-btn').style.display = '';
+  document.getElementById('hint-btn').textContent = '💡 Hint (-10s)';
+  
+  // Clean up old panzoom
+  if (state.panzoomInstance) {
+    state.panzoomInstance.dispose();
+    state.panzoomInstance = null;
+  }
+  
+  // Remove old markers
+  document.querySelectorAll('.found-marker,.click-feedback').forEach(e => e.remove());
+  
+  const img = document.getElementById('painting-img');
+  const frame = document.getElementById('painting-frame');
+  document.getElementById('painting-title').textContent = level.title;
+  
+  img.onload = () => {
+    // Reset transform
+    frame.style.transform = '';
+    
+    // Init panzoom
+    state.panzoomInstance = panzoom(frame, {
+      maxZoom: 8,
+      minZoom: 0.5,
+      smoothScroll: false,
+      zoomDoubleClickSpeed: 1,
+      beforeMouseDown: () => false, // allow all mouse events through
+    });
+    
+    // Reset to center
+    state.panzoomInstance.moveTo(0, 0);
+    state.panzoomInstance.zoomAbs(0, 0, 1);
+    
+    state.gameActive = true;
+    state.levelStartTime = Date.now();
+    startTimer();
+  };
+  
+  img.src = level.image;
+  
+  // Setup click detection
+  img.onclick = handlePaintingClick;
+}
+
+function handlePaintingClick(e) {
+  if (!state.gameActive) return;
+  
+  const level = LEVELS[state.currentLevel];
+  const img = e.target;
+  const rect = img.getBoundingClientRect();
+  
+  // Get click position as percentage of image
+  const clickX = (e.clientX - rect.left) / rect.width;
+  const clickY = (e.clientY - rect.top) / rect.height;
+  
+  // Distance to Jeffrey
+  const dx = clickX - level.jeffreyX;
+  const dy = clickY - level.jeffreyY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  
+  if (dist <= level.radius) {
+    // HIT!
+    foundJeffrey(e.clientX, e.clientY);
+  } else {
+    // MISS
+    showClickFeedback(e.clientX, e.clientY, 'miss');
+    state.timer = Math.max(0, state.timer - 2);
+    updateTimerDisplay();
+    // Vibrate briefly for miss
+    try { navigator.vibrate?.(50); } catch(e) {}
+  }
+}
+
+function showClickFeedback(x, y, type) {
+  const el = document.createElement('div');
+  el.className = `click-feedback ${type}`;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 400);
+}
+
+function foundJeffrey(clickX, clickY) {
+  state.gameActive = false;
+  clearInterval(state.timerInterval);
+  
+  // Haptic
+  try { navigator.vibrate?.(200); } catch(e) {}
+  
+  // Show hit feedback
+  showClickFeedback(clickX, clickY, 'hit');
+  
+  // Show found marker on Jeffrey's position
+  const level = LEVELS[state.currentLevel];
+  const img = document.getElementById('painting-img');
+  const rect = img.getBoundingClientRect();
+  
+  const marker = document.createElement('div');
+  marker.className = 'found-marker';
+  const size = rect.width * level.radius * 2;
+  marker.style.width = size + 'px';
+  marker.style.height = size + 'px';
+  marker.style.left = (rect.left + level.jeffreyX * rect.width) + 'px';
+  marker.style.top = (rect.top + level.jeffreyY * rect.height) + 'px';
+  document.body.appendChild(marker);
+  
+  // Calculate score
+  const elapsed = (Date.now() - state.levelStartTime) / 1000;
+  const timeBonus = Math.max(0, Math.round(100 - elapsed * 2));
+  const hintPenalty = state.hintUsed ? -15 : 10;
+  const levelScore = Math.max(10, timeBonus + hintPenalty);
+  
+  state.totalScore += levelScore;
+  state.foundCount++;
+  
+  document.getElementById('score').textContent = state.totalScore;
+  document.getElementById('found-count').textContent = state.foundCount;
+  
+  // Show reveal after brief delay
+  setTimeout(() => {
+    document.getElementById('reveal-score').textContent = '+' + levelScore;
+    document.getElementById('reveal-breakdown').textContent = 
+      `Tijd: ${elapsed.toFixed(1)}s | Tijdbonus: ${timeBonus} | ${state.hintUsed ? 'Hint gebruikt: -15' : 'Geen hint: +10'}`;
+    document.getElementById('reveal-fact').textContent = level.funFact;
+    showScreen('reveal');
+  }, 1500);
+}
+
+function nextLevel() {
+  state.currentLevel++;
+  if (state.currentLevel >= LEVELS.length) {
+    endGame();
+  } else {
+    loadLevel();
+  }
+}
+
+function useHint() {
+  if (state.hintUsed || !state.gameActive) return;
+  state.hintUsed = true;
+  state.timer = Math.max(0, state.timer - 10);
+  updateTimerDisplay();
+  
+  const level = LEVELS[state.currentLevel];
+  const btn = document.getElementById('hint-btn');
+  btn.textContent = '💡 ' + level.hint;
+  btn.style.pointerEvents = 'none';
+  btn.style.opacity = '0.7';
+}
+
+// ===== TIMER =====
+function startTimer() {
+  state.timer = TIMERS[state.difficulty];
+  updateTimerDisplay();
+  
+  clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    state.timer--;
+    updateTimerDisplay();
+    if (state.timer <= 0) {
+      clearInterval(state.timerInterval);
+      state.gameActive = false;
+      // Time's up — move to next
+      setTimeout(() => nextLevel(), 500);
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer');
+  el.textContent = Math.max(0, state.timer);
+  el.classList.toggle('urgent', state.timer <= 10);
+}
+
+// ===== END GAME =====
+function endGame() {
+  clearInterval(state.timerInterval);
+  if (state.panzoomInstance) { state.panzoomInstance.dispose(); state.panzoomInstance = null; }
+  
+  document.getElementById('end-total').textContent = state.totalScore;
+  document.getElementById('end-stats').innerHTML = 
+    `Schilderijen gevonden: ${state.foundCount} / ${LEVELS.length}<br>
+     Moeilijkheid: ${state.difficulty}<br>
+     ${state.totalScore > 400 ? '🏆 Meesterdetective!' : state.totalScore > 250 ? '🔍 Scherp oog!' : '👀 Blijf zoeken!'}`;
+  showScreen('end');
+}
+
+function shareScore() {
+  const text = `🔍 Waar is Jeffrey? — ${state.totalScore} punten!\n${state.foundCount}/${LEVELS.length} schilderijen gevonden.\nKun jij hem vinden?`;
+  if (navigator.share) {
+    navigator.share({ title: 'Waar is Jeffrey?', text });
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text);
+    alert('Score gekopieerd naar klembord!');
+  }
+}
+
+// ===== TOUCH HANDLING =====
+// Prevent default double-tap zoom on mobile
+let lastTap = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTap < 300) {
+    e.preventDefault();
+    // Double tap — zoom in on panzoom
+    if (state.panzoomInstance && state.gameActive) {
+      const touch = e.changedTouches[0];
+      state.panzoomInstance.zoomTo(touch.clientX, touch.clientY, 2);
+    }
+  }
+  lastTap = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>
