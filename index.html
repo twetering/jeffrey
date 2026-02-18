@@ -5,543 +5,393 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Waar is Jeffrey?</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/panzoom@9.4.3/dist/panzoom.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0d0d0d;--gold:#c4a35a;--gold-light:#e8d5a3;--red:#8b2020;--text:#e8e0d0}
+:root{--bg:#0d0d0d;--gold:#c4a35a;--gold-light:#e8d5a3;--red:#cc3333;--text:#e8e0d0;--muted:#888}
 body{background:var(--bg);color:var(--text);font-family:'Georgia',serif;overflow:hidden;height:100vh;width:100vw;-webkit-tap-highlight-color:transparent}
-h1,h2,h3,.title-font{font-family:'Playfair Display',serif}
+h1,h2,h3,.tf{font-family:'Playfair Display',serif}
+a{color:var(--gold)}
 
-/* Canvas texture overlay */
-body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:99999;
 background-image:url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-opacity:0.4}
+opacity:0.3}
 
-/* Screens */
-.screen{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:1}
+.screen{display:none;position:fixed;inset:0;z-index:1;flex-direction:column}
 .screen.active{display:flex}
 
-/* INTRO */
-#intro{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;
-background:radial-gradient(ellipse at center,#1a1510 0%,#0d0d0d 70%)}
-#intro h1{font-size:clamp(2.5rem,8vw,5rem);color:var(--gold);letter-spacing:0.05em;margin-bottom:0.5rem;
-text-shadow:0 0 40px rgba(196,163,90,0.3)}
-#intro .subtitle{font-size:clamp(1rem,3vw,1.5rem);color:var(--gold-light);opacity:0.8;margin-bottom:2rem;font-style:italic}
-#intro .disclaimer{font-size:0.75rem;color:#666;max-width:400px;margin-top:2rem;line-height:1.5}
-
 .btn{font-family:'Playfair Display',serif;background:transparent;color:var(--gold);border:2px solid var(--gold);
-padding:1rem 2.5rem;font-size:1.1rem;cursor:pointer;letter-spacing:0.1em;transition:all 0.3s;text-transform:uppercase}
+padding:0.9rem 2.2rem;font-size:1rem;cursor:pointer;letter-spacing:0.08em;transition:all 0.3s;text-transform:uppercase}
 .btn:hover,.btn:active{background:var(--gold);color:var(--bg)}
-.btn-small{padding:0.5rem 1rem;font-size:0.8rem}
+.btn-s{padding:0.5rem 1rem;font-size:0.8rem}
+.btn-gold{background:var(--gold);color:var(--bg)}
+.btn:disabled{opacity:0.3;pointer-events:none}
 
-/* Difficulty select */
-.difficulty-select{display:flex;gap:1rem;margin:1.5rem 0;flex-wrap:wrap;justify-content:center}
-.diff-btn{padding:0.6rem 1.5rem;font-size:0.9rem;border:1px solid var(--gold);background:transparent;color:var(--gold);
-cursor:pointer;font-family:'Playfair Display',serif;transition:all 0.3s;opacity:0.6}
-.diff-btn.selected{opacity:1;background:var(--gold);color:var(--bg)}
+#intro{align-items:center;justify-content:center;text-align:center;padding:2rem;
+background:radial-gradient(ellipse at center,#1a1510 0%,var(--bg) 70%)}
+.logo{font-size:clamp(2.5rem,8vw,4.5rem);color:var(--gold);letter-spacing:0.05em;margin-bottom:0.3rem;
+text-shadow:0 0 60px rgba(196,163,90,0.25)}
+.tagline{font-size:clamp(1rem,3vw,1.4rem);color:var(--gold-light);opacity:0.7;font-style:italic;margin-bottom:2.5rem}
+.diff-row{display:flex;gap:0.8rem;margin-bottom:2rem;flex-wrap:wrap;justify-content:center}
+.diff-btn{padding:0.5rem 1.2rem;font-size:0.85rem;border:1px solid var(--gold);background:transparent;
+color:var(--gold);cursor:pointer;font-family:'Playfair Display',serif;transition:all 0.3s;opacity:0.5}
+.diff-btn.sel{opacity:1;background:var(--gold);color:var(--bg)}
+.disc{font-size:0.72rem;color:#555;max-width:420px;margin-top:2rem;line-height:1.6}
 
-/* GAME */
-#game{flex-direction:column;background:var(--bg)}
-.game-hud{position:absolute;top:0;left:0;right:0;z-index:100;display:flex;justify-content:space-between;
-align-items:center;padding:0.8rem 1.2rem;background:linear-gradient(to bottom,rgba(13,13,13,0.95),transparent);pointer-events:none}
-.game-hud>*{pointer-events:auto}
-.hud-score,.hud-timer,.hud-found{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold)}
-.hud-timer{font-size:1.4rem;font-weight:700}
-.hud-timer.urgent{color:#ff4444;animation:pulse 0.5s infinite alternate}
+#game{background:var(--bg)}
+#map{flex:1;background:var(--bg);z-index:1}
+.leaflet-container{background:var(--bg)!important}
+.leaflet-control-zoom{display:none}
+.leaflet-tile{image-rendering:auto}
+
+.hud{position:absolute;top:0;left:0;right:0;z-index:1000;display:flex;justify-content:space-between;
+align-items:center;padding:0.7rem 1rem;background:linear-gradient(to bottom,rgba(13,13,13,0.92) 60%,transparent);pointer-events:none}
+.hud>*{pointer-events:auto}
+.hud-i{font-family:'Playfair Display',serif;color:var(--gold);font-size:1rem}
+.hud-t{font-size:1.5rem;font-weight:700;min-width:2.5rem;text-align:center;transition:color 0.3s}
+.hud-t.urg{color:var(--red);animation:pulse .5s infinite alternate}
 @keyframes pulse{from{opacity:1}to{opacity:0.5}}
 
-.painting-info{position:absolute;bottom:0;left:0;right:0;z-index:100;text-align:center;
-padding:1rem;background:linear-gradient(to top,rgba(13,13,13,0.95),transparent);pointer-events:none}
-.painting-title{font-family:'Playfair Display',serif;font-size:clamp(0.9rem,2.5vw,1.3rem);color:var(--gold-light)}
-.painting-hint{margin-top:0.5rem;pointer-events:auto}
+.bbar{position:absolute;bottom:0;left:0;right:0;z-index:1000;text-align:center;
+padding:0.8rem 1rem 1.2rem;background:linear-gradient(to top,rgba(13,13,13,0.92) 60%,transparent);pointer-events:none}
+.bbar>*{pointer-events:auto}
+.ptitle{font-family:'Playfair Display',serif;font-size:clamp(0.85rem,2.5vw,1.2rem);color:var(--gold-light);margin-bottom:0.5rem}
+.hrow{display:flex;gap:0.5rem;justify-content:center;align-items:center;flex-wrap:wrap}
+.htxt{color:var(--gold-light);font-style:italic;font-size:0.9rem;max-width:400px}
 
-/* Painting container with frame */
-.painting-container{flex:1;display:flex;align-items:center;justify-content:center;padding:3.5rem 1rem;overflow:hidden;position:relative}
-.painting-frame{position:relative;
-box-shadow:0 0 0 4px #8b7332,0 0 0 6px #5a4a20,0 0 0 10px rgba(139,115,50,0.3),
-0 0 30px rgba(0,0,0,0.8),inset 0 0 20px rgba(0,0,0,0.2);
-border:3px solid #a08940;outline:2px solid #6b5a2a}
-.painting-frame img{display:block;max-width:calc(100vw - 2rem);max-height:calc(100vh - 8rem);width:auto;height:auto;cursor:crosshair}
+.cr{position:fixed;width:40px;height:40px;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:2000}
+.cr.miss{border:2px solid var(--red);background:rgba(200,40,40,0.15);animation:ro .5s forwards}
+.cr.hit{border:3px solid var(--gold);background:rgba(196,163,90,0.2);animation:rg .8s forwards}
+@keyframes ro{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.5)}}
+@keyframes rg{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}60%{opacity:1;transform:translate(-50%,-50%) scale(2)}100%{opacity:0;transform:translate(-50%,-50%) scale(3)}}
 
-/* Click feedback */
-.click-feedback{position:absolute;width:30px;height:30px;border-radius:50%;transform:translate(-50%,-50%);
-pointer-events:none;z-index:200;animation:clickFade 0.4s forwards}
-.click-feedback.miss{border:2px solid rgba(200,50,50,0.8);background:rgba(200,50,50,0.2)}
-.click-feedback.hit{border:2px solid var(--gold);background:rgba(196,163,90,0.3)}
-@keyframes clickFade{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
+.jm{width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);
+box-shadow:0 0 20px rgba(196,163,90,0.6),0 0 40px rgba(196,163,90,0.3);animation:fp 1.5s infinite}
+@keyframes fp{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:0.7}}
 
-/* Found overlay */
-.found-marker{position:absolute;pointer-events:none;z-index:150;border-radius:50%;
-border:3px solid var(--gold);animation:foundPulse 1.5s infinite;
-box-shadow:0 0 20px rgba(196,163,90,0.5),0 0 40px rgba(196,163,90,0.2)}
-@keyframes foundPulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1}50%{transform:translate(-50%,-50%) scale(1.2);opacity:0.7}}
+#reveal,#timeup{align-items:center;justify-content:center;text-align:center;padding:2rem;background:rgba(13,13,13,0.96)}
+.rv-t{color:var(--gold);font-size:2rem;margin-bottom:0.5rem}
+.rv-s{font-size:3.5rem;color:var(--gold-light);font-family:'Playfair Display',serif}
+.rv-b{color:var(--muted);font-size:0.85rem;margin:0.5rem 0 1rem;line-height:1.8}
+.rv-f{max-width:480px;line-height:1.7;color:#aaa;font-style:italic;margin-bottom:1.5rem;font-size:0.95rem}
+.tu-t{color:var(--red);font-size:2rem;margin-bottom:1rem}
 
-/* REVEAL */
-#reveal{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;
-background:rgba(13,13,13,0.95)}
-#reveal h2{color:var(--gold);font-size:1.8rem;margin-bottom:1rem}
-.reveal-score{font-size:3rem;color:var(--gold-light);font-family:'Playfair Display',serif;margin:0.5rem 0}
-.reveal-fact{max-width:500px;line-height:1.7;margin:1rem 0;color:#bbb;font-style:italic}
-.reveal-breakdown{color:#888;font-size:0.85rem;margin-bottom:1.5rem}
+#end{align-items:center;justify-content:center;text-align:center;padding:2rem;
+background:radial-gradient(ellipse at center,#1a1510 0%,var(--bg) 70%)}
+.es{font-size:4.5rem;color:var(--gold-light);font-family:'Playfair Display',serif}
+.el{color:var(--gold);font-size:1.2rem;margin-bottom:1rem}
+.est{color:var(--muted);line-height:2;margin-bottom:2rem}
+.er{color:var(--gold);font-size:1.3rem;margin-bottom:1.5rem}
+.brow{display:flex;gap:0.8rem;flex-wrap:wrap;justify-content:center}
 
-/* END */
-#end{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;
-background:radial-gradient(ellipse at center,#1a1510 0%,#0d0d0d 70%)}
-#end h2{color:var(--gold);font-size:2.5rem;margin-bottom:0.5rem}
-.end-total{font-size:4rem;color:var(--gold-light);font-family:'Playfair Display',serif}
-.end-stats{color:#888;margin:1rem 0 2rem;line-height:2}
-.end-buttons{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
-
-/* ABOUT */
-#about{flex-direction:column;align-items:center;padding:2rem;overflow-y:auto;
-background:var(--bg)}
-#about .content{max-width:600px;line-height:1.8}
+#about{align-items:center;padding:2rem;overflow-y:auto;background:var(--bg)}
+#about .ct{max-width:600px;line-height:1.8;padding-top:3rem}
 #about h2{color:var(--gold);margin:1.5rem 0 0.5rem}
 #about p{color:#999;margin-bottom:1rem}
-#about .back-btn{position:fixed;top:1rem;right:1rem;z-index:100}
+.bbk{position:fixed;top:1rem;right:1rem;z-index:100}
 
-/* Transitions */
-.fade-in{animation:fadeIn 0.6s ease}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.fade-in{animation:fi .5s ease}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+
+.fs-btn{position:absolute;top:0.7rem;right:0.7rem;z-index:1001;background:rgba(13,13,13,0.7);
+border:1px solid var(--gold);color:var(--gold);width:36px;height:36px;border-radius:4px;
+cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center}
+.snd-btn{position:absolute;top:0.7rem;right:3.2rem;z-index:1001;background:rgba(13,13,13,0.7);
+border:1px solid var(--gold);color:var(--gold);width:36px;height:36px;border-radius:4px;
+cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center}
 </style>
 </head>
 <body>
 
-<!-- INTRO SCREEN -->
 <div id="intro" class="screen active">
-  <h1 class="title-font">Waar is Jeffrey?</h1>
-  <p class="subtitle">Hij was overal. Kun jij hem vinden?</p>
-  
-  <div class="difficulty-select">
-    <button class="diff-btn" data-diff="easy" onclick="setDifficulty('easy',this)">Makkelijk (60s)</button>
-    <button class="diff-btn selected" data-diff="medium" onclick="setDifficulty('medium',this)">Medium (45s)</button>
-    <button class="diff-btn" data-diff="hard" onclick="setDifficulty('hard',this)">Moeilijk (30s)</button>
+  <h1 class="logo tf">Waar is Jeffrey?</h1>
+  <p class="tagline">Hij was overal. Kun jij hem vinden?</p>
+  <div class="diff-row">
+    <button class="diff-btn" onclick="setDiff('easy',this)">Makkelijk (60s)</button>
+    <button class="diff-btn sel" onclick="setDiff('medium',this)">Medium (45s)</button>
+    <button class="diff-btn" onclick="setDiff('hard',this)">Moeilijk (30s)</button>
   </div>
-  
-  <button class="btn" onclick="startGame()">Begin de zoektocht</button>
-  
-  <p class="disclaimer">
-    Dit is een satirisch kunstproject. Alle schilderijen zijn bewerkt met AI. 
-    <a href="#" onclick="showScreen('about');return false" style="color:var(--gold)">Meer info →</a>
-  </p>
+  <button class="btn btn-gold" onclick="startGame()">Begin de zoektocht</button>
+  <p class="disc">Satirisch kunstproject. Alle schilderijen bewerkt met AI. <a href="#" onclick="show('about');return false">Meer info →</a></p>
 </div>
 
-<!-- GAME SCREEN -->
 <div id="game" class="screen">
-  <div class="game-hud">
-    <div class="hud-score">⭐ <span id="score">0</span></div>
-    <div class="hud-timer" id="timer">45</div>
-    <div class="hud-found"><span id="found-count">0</span>/7</div>
+  <div class="hud">
+    <div class="hud-i">⭐ <span id="hs">0</span></div>
+    <div class="hud-i hud-t" id="ht">45</div>
+    <div class="hud-i"><span id="hf">0</span>/<span id="htot">7</span></div>
   </div>
-  
-  <div class="painting-container" id="painting-container">
-    <div class="painting-frame" id="painting-frame">
-      <img id="painting-img" src="" alt="Schilderij" draggable="false">
+  <div id="map"></div>
+  <div class="bbar">
+    <div class="ptitle" id="pt"></div>
+    <div class="hrow">
+      <button class="btn btn-s" id="hb" onclick="useHint()">💡 Hint (-10s)</button>
+      <span class="htxt" id="htx" style="display:none"></span>
     </div>
   </div>
-  
-  <div class="painting-info">
-    <div class="painting-title" id="painting-title"></div>
-    <div class="painting-hint">
-      <button class="btn btn-small" id="hint-btn" onclick="useHint()">💡 Hint (-10s)</button>
-    </div>
-  </div>
+  <button class="fs-btn" onclick="toggleFS()" title="Volledig scherm">⛶</button>
+  <button class="snd-btn" id="sb" onclick="toggleSound()">🔊</button>
 </div>
 
-<!-- REVEAL SCREEN -->
 <div id="reveal" class="screen">
-  <h2>Gevonden! 🎉</h2>
-  <div class="reveal-score" id="reveal-score">+85</div>
-  <div class="reveal-breakdown" id="reveal-breakdown"></div>
-  <p class="reveal-fact" id="reveal-fact"></p>
-  <button class="btn" onclick="nextLevel()">Volgende →</button>
+  <h2 class="rv-t tf">Gevonden! 🎉</h2>
+  <div class="rv-s" id="rs">+85</div>
+  <div class="rv-b" id="rb"></div>
+  <p class="rv-f" id="rf"></p>
+  <button class="btn btn-gold" onclick="nextLevel()">Volgende schilderij →</button>
 </div>
 
-<!-- END SCREEN -->
+<div id="timeup" class="screen">
+  <h2 class="tu-t tf">⏰ Tijd is op!</h2>
+  <p style="color:#aaa;margin-bottom:0.5rem" id="tut"></p>
+  <p style="color:#666;font-style:italic;margin-bottom:1.5rem">Jeffrey blijft verborgen... voor nu.</p>
+  <button class="btn" onclick="nextLevel()">Volgende schilderij →</button>
+</div>
+
 <div id="end" class="screen">
-  <h2 class="title-font">Zoektocht Voltooid</h2>
-  <div class="end-total" id="end-total">0</div>
-  <div style="color:var(--gold);margin-bottom:0.5rem">punten</div>
-  <div class="end-stats" id="end-stats"></div>
-  <div class="end-buttons">
-    <button class="btn" onclick="shareScore()">📤 Deel je score</button>
-    <button class="btn" onclick="location.reload()">🔄 Opnieuw</button>
+  <h2 class="tf" style="color:var(--gold);font-size:2rem;margin-bottom:0.5rem">Zoektocht Voltooid</h2>
+  <div class="es" id="esc">0</div>
+  <div class="el">punten</div>
+  <div class="er" id="erk"></div>
+  <div class="est" id="ess"></div>
+  <div class="brow">
+    <button class="btn" onclick="shareScore()">📤 Deel score</button>
+    <button class="btn btn-gold" onclick="location.reload()">🔄 Opnieuw</button>
   </div>
 </div>
 
-<!-- ABOUT SCREEN -->
 <div id="about" class="screen">
-  <button class="btn btn-small back-btn" onclick="showScreen('intro')">← Terug</button>
-  <div class="content" style="padding-top:3rem">
+  <button class="btn btn-s bbk" onclick="show('intro')">← Terug</button>
+  <div class="ct">
     <h2>Over dit project</h2>
-    <p>
-      <strong>"Waar is Jeffrey?"</strong> is een satirisch digitaal kunstproject dat de alomtegenwoordigheid 
-      van Jeffrey Epstein in machtkringen visualiseert. Door hem subtiel in historische meesterwerken te 
-      plaatsen, nodigt het spel je uit om na te denken over hoe macht zich door de eeuwen heen verschuilt 
-      in het volle zicht.
-    </p>
-    
-    <h2>De connectie</h2>
-    <p>
-      Jeffrey Epstein onderhield nauwe banden met koninklijke families, presidenten, en andere 
-      machthebbers wereldwijd. Prins Andrew, leden van het Britse koningshuis, en talloze andere 
-      prominenten verschenen op foto's en gastenlijsten naast Epstein — vaak in weelde en pracht 
-      die doet denken aan de banketten en ceremonies uit deze schilderijen.
-    </p>
-    
-    <h2>Bronvermelding schilderijen</h2>
-    <p>
-      🖼 <strong>De Oranjes</strong> — Portret Koninklijke Familie, Tom (privécollectie)<br>
-      🖼 <strong>De Nachtwacht</strong> — Rembrandt van Rijn, 1642 (Rijksmuseum)<br>
-      🖼 <strong>Kroningsbanket George IV</strong> — George Jones, 1821 (Royal Collection Trust)<br>
-      🖼 <strong>School van Athene</strong> — Raphael, 1509-1511 (Vaticaanse Musea)<br>
-      🖼 <strong>Boerenbruiloft</strong> — Pieter Bruegel de Oude, 1567 (Kunsthistorisches Museum)<br>
-      🖼 <strong>Het Laatste Avondmaal</strong> — Leonardo da Vinci, 1495-1498 (Santa Maria delle Grazie)<br>
-      🖼 <strong>Bar bij de Folies-Bergère</strong> — Édouard Manet, 1882 (Courtauld Gallery)
-    </p>
-    
+    <p><strong>"Waar is Jeffrey?"</strong> is een satirisch digitaal kunstproject dat de alomtegenwoordigheid van Jeffrey Epstein in machtkringen visualiseert.</p>
+    <h2>Bronvermelding</h2>
+    <p>🖼 De Oranjes — Privécollectie<br>🖼 De Nachtwacht — Rembrandt, 1642 (Rijksmuseum)<br>🖼 Kroningsbanket George IV — George Jones, 1821<br>🖼 School van Athene — Raphael, 1511<br>🖼 Boerenbruiloft — Bruegel, 1567<br>🖼 Het Laatste Avondmaal — Da Vinci, 1498<br>🖼 Bar bij de Folies-Bergère — Manet, 1882</p>
     <h2>Disclaimer</h2>
-    <p>
-      Dit is een satirisch kunstproject. De bewerkte schilderijen zijn gegenereerd met AI (Krea Nano Banana Pro). 
-      Geen enkel origineel kunstwerk is beschadigd. Het project dient als politiek commentaar en valt onder 
-      het recht op artistieke vrijheid en satire.
-    </p>
+    <p>Satirisch kunstproject. Bewerkt met AI (Krea). Geen origineel kunstwerk beschadigd.</p>
   </div>
 </div>
 
 <script>
-// ===== GAME DATA =====
 const LEVELS = [
-  {
-    id: "oranjes",
-    image: "images/edited/oranjes.jpg",
-    title: "De Oranjes — Koninklijke Familie, 2020s",
-    jeffreyX: 0.85, jeffreyY: 0.32, radius: 0.045,
-    hint: "Zoek rechts boven, tussen de gasten...",
-    funFact: "Epstein bezocht Europa regelmatig en had connecties met meerdere Europese koninklijke families, waaronder het Nederlandse koningshuis via gezamenlijke sociale kringen.",
-    difficulty: "easy"
-  },
-  {
-    id: "nachtwacht",
-    image: "images/edited/night_watch.jpg",
-    title: "De Nachtwacht — Rembrandt, 1642",
-    jeffreyX: 0.82, jeffreyY: 0.42, radius: 0.04,
-    hint: "Zoek in de schaduwen, rechts...",
-    funFact: "De Nachtwacht hangt in het Rijksmuseum — een museum dat Epstein meerdere keren bezocht tijdens zijn reizen naar Amsterdam.",
-    difficulty: "medium"
-  },
-  {
-    id: "banquet",
-    image: "images/edited/george_iv_banquet.jpg",
-    title: "Kroningsbanket George IV — George Jones, 1821",
-    jeffreyX: 0.35, jeffreyY: 0.70, radius: 0.035,
-    hint: "Zoek bij de banktafels, links van het midden...",
-    funFact: "Het Britse koningshuis is nauw verbonden met het Epstein-schandaal. Prins Andrew bezocht Epstein's eiland meerdere keren.",
-    difficulty: "medium"
-  },
-  {
-    id: "athens",
-    image: "images/edited/school_athens.jpg",
-    title: "School van Athene — Raphael, 1511",
-    jeffreyX: 0.08, jeffreyY: 0.55, radius: 0.035,
-    hint: "Zoek links, bij de bogen...",
-    funFact: "Net als de filosofen in dit fresco omringde Epstein zich met intellectuelen en wetenschappers — waaronder Stephen Hawking en Noam Chomsky.",
-    difficulty: "hard"
-  },
-  {
-    id: "wedding",
-    image: "images/edited/peasant_wedding.jpg",
-    title: "Boerenbruiloft — Bruegel, 1567",
-    jeffreyX: 0.75, jeffreyY: 0.40, radius: 0.04,
-    hint: "Zoek rechts, aan het einde van de tafel...",
-    funFact: "Bruegel schilderde het gewone volk, maar Epstein bewoog zich juist in de hoogste kringen — een contrast dat het des te absurder maakt.",
-    difficulty: "hard"
-  },
-  {
-    id: "supper",
-    image: "images/edited/last_supper.jpg",
-    title: "Het Laatste Avondmaal — Da Vinci, 1498",
-    jeffreyX: 0.92, jeffreyY: 0.40, radius: 0.035,
-    hint: "Zoek helemaal rechts, in de schaduw...",
-    funFact: "Zoals Judas aan de tafel zat, zo zat Epstein aan de tafel met de machtigen — verborgen in het volle zicht.",
-    difficulty: "expert"
-  },
-  {
-    id: "bar",
-    image: "images/edited/bar_folies.jpg",
-    title: "Bar bij de Folies-Bergère — Manet, 1882",
-    jeffreyX: 0.65, jeffreyY: 0.25, radius: 0.04,
-    hint: "Zoek in de spiegelreflectie, bovenaan...",
-    funFact: "Manet schilderde de Parijse elite in hun vermaak — precies het milieu waar Epstein zich thuis voelde.",
-    difficulty: "medium"
-  }
+  {id:"oranjes",w:2400,h:1792,maxZ:4,title:"De Oranjes — Koninklijke Familie, 2020s",jx:.85,jy:.32,r:.045,hint:"Zoek rechts boven, tussen de gasten...",hint2:"Hij staat bijna achter de groep...",fact:"Epstein bezocht Europa regelmatig en had connecties met meerdere Europese koninklijke families.",diff:"easy"},
+  {id:"nachtwacht",w:4800,h:3584,maxZ:5,title:"De Nachtwacht — Rembrandt, 1642",jx:.82,jy:.42,r:.04,hint:"Zoek in de schaduwen, rechts...",hint2:"Tussen de schutters, half verborgen...",fact:"De Nachtwacht hangt in het Rijksmuseum — een museum dat Epstein meerdere keren bezocht.",diff:"medium"},
+  {id:"banquet",w:5504,h:3072,maxZ:5,title:"Kroningsbanket George IV — George Jones, 1821",jx:.35,jy:.70,r:.035,hint:"Zoek bij de banktafels, links van het midden...",hint2:"Hij zit aan tafel, kijkt naar het podium...",fact:"Prins Andrew bezocht Epstein's eiland meerdere keren.",diff:"medium"},
+  {id:"athens",w:4800,h:3584,maxZ:5,title:"School van Athene — Raphael, 1511",jx:.08,jy:.55,r:.035,hint:"Zoek links, bij de bogen...",hint2:"Hij leunt tegen een pilaar, observerend...",fact:"Epstein omringde zich met intellectuelen — Stephen Hawking, Noam Chomsky, en talloze anderen.",diff:"hard"},
+  {id:"wedding",w:4800,h:3584,maxZ:5,title:"Boerenbruiloft — Bruegel, 1567",jx:.75,jy:.40,r:.04,hint:"Zoek rechts, aan het einde van de tafel...",hint2:"Hij zit te eten, past bijna in het gezelschap...",fact:"Bruegel schilderde het gewone volk, maar Epstein bewoog zich in de hoogste kringen.",diff:"hard"},
+  {id:"supper",w:5504,h:3072,maxZ:5,title:"Het Laatste Avondmaal — Da Vinci, 1498",jx:.92,jy:.40,r:.035,hint:"Zoek helemaal rechts, in de schaduw...",hint2:"Hij zit aan het uiteinde, als een ongenode gast...",fact:"Zoals Judas aan de tafel zat, zo zat Epstein bij de machtigen — verborgen in het volle zicht.",diff:"expert"},
+  {id:"bar",w:4800,h:3584,maxZ:5,title:"Bar bij de Folies-Bergère — Manet, 1882",jx:.65,jy:.25,r:.04,hint:"Zoek in de spiegelreflectie, bovenaan...",hint2:"Zijn gezicht verschijnt in de spiegel achter de bar...",fact:"Manet schilderde de Parijse elite — precies het milieu waar Epstein zich thuis voelde.",diff:"medium"}
 ];
 
-// ===== STATE =====
-let state = {
-  difficulty: 'medium',
-  currentLevel: 0,
-  totalScore: 0,
-  foundCount: 0,
-  timer: 45,
-  timerInterval: null,
-  hintUsed: false,
-  panzoomInstance: null,
-  gameActive: false,
-  levelStartTime: 0
-};
+const TIMERS={easy:60,medium:45,hard:30};
+let S={diff:'medium',level:0,score:0,found:0,timer:45,interval:null,hintsUsed:0,misses:0,active:false,startTime:0,map:null,soundOn:true};
 
-const TIMERS = { easy: 60, medium: 45, hard: 30 };
+// Audio
+let actx=null;
+function ac(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();return actx}
+function sndTick(){if(!S.soundOn)return;try{const c=ac(),o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=800;g.gain.setValueAtTime(.08,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.05);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.05)}catch(e){}}
+function sndMiss(){if(!S.soundOn)return;try{const c=ac(),o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.value=200;o.frequency.exponentialRampToValueAtTime(100,c.currentTime+.15);g.gain.setValueAtTime(.12,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.15);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.15)}catch(e){}}
+function sndHit(){if(!S.soundOn)return;try{const c=ac();[523,659,784].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.15,c.currentTime+i*.1);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.1+.3);o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.1);o.stop(c.currentTime+i*.1+.3)})}catch(e){}}
+function sndUrg(){if(!S.soundOn)return;try{const c=ac(),o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.value=1000;g.gain.setValueAtTime(.06,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.08);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.08)}catch(e){}}
+function toggleSound(){S.soundOn=!S.soundOn;document.getElementById('sb').textContent=S.soundOn?'🔊':'🔇'}
 
-// ===== SCREEN MANAGEMENT =====
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const screen = document.getElementById(id);
-  screen.classList.add('active');
-  screen.classList.add('fade-in');
-  setTimeout(() => screen.classList.remove('fade-in'), 600);
-}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);el.classList.add('active','fade-in');setTimeout(()=>el.classList.remove('fade-in'),500)}
+function setDiff(d,b){S.diff=d;document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('sel'));b.classList.add('sel')}
+function toggleFS(){if(document.fullscreenElement)document.exitFullscreen?.();else document.documentElement.requestFullscreen?.()}
 
-function setDifficulty(diff, btn) {
-  state.difficulty = diff;
-  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-}
-
-// ===== GAME =====
-function startGame() {
-  state.currentLevel = 0;
-  state.totalScore = 0;
-  state.foundCount = 0;
-  document.getElementById('score').textContent = '0';
-  document.getElementById('found-count').textContent = '0';
-  
-  // Try fullscreen
-  try { document.documentElement.requestFullscreen?.(); } catch(e) {}
-  
+function startGame(){
+  S.level=0;S.score=0;S.found=0;
+  document.getElementById('hs').textContent='0';
+  document.getElementById('hf').textContent='0';
+  document.getElementById('htot').textContent=LEVELS.length;
+  try{ac().resume()}catch(e){}
   loadLevel();
 }
 
-function loadLevel() {
-  const level = LEVELS[state.currentLevel];
-  if (!level) { endGame(); return; }
+function loadLevel(){
+  const lv=LEVELS[S.level];
+  if(!lv){endGame();return}
+  show('game');
+  S.hintsUsed=0;S.misses=0;S.active=false;
+
+  const hb=document.getElementById('hb');
+  hb.textContent='💡 Hint (-10s)';hb.disabled=false;hb.style.display='';
+  document.getElementById('htx').style.display='none';
+  document.getElementById('htx').textContent='';
+  document.getElementById('pt').textContent=lv.title;
+
+  if(S.map){S.map.remove();S.map=null}
+
+  // Use a simple image overlay approach with Leaflet
+  // CRS.Simple: coordinates are [y, x] where y increases upward
+  // We'll place the image from [0,0] (bottom-left) to [h, w] (top-right)
+  const bounds = [[0, 0], [lv.h, lv.w]];
   
-  showScreen('game');
-  state.hintUsed = false;
-  state.gameActive = false;
-  document.getElementById('hint-btn').style.display = '';
-  document.getElementById('hint-btn').textContent = '💡 Hint (-10s)';
-  
-  // Clean up old panzoom
-  if (state.panzoomInstance) {
-    state.panzoomInstance.dispose();
-    state.panzoomInstance = null;
-  }
-  
-  // Remove old markers
-  document.querySelectorAll('.found-marker,.click-feedback').forEach(e => e.remove());
-  
-  const img = document.getElementById('painting-img');
-  const frame = document.getElementById('painting-frame');
-  document.getElementById('painting-title').textContent = level.title;
-  
-  img.onload = () => {
-    // Reset transform
-    frame.style.transform = '';
-    
-    // Init panzoom
-    state.panzoomInstance = panzoom(frame, {
-      maxZoom: 8,
-      minZoom: 0.5,
-      smoothScroll: false,
-      zoomDoubleClickSpeed: 1,
-      beforeMouseDown: () => false, // allow all mouse events through
-    });
-    
-    // Reset to center
-    state.panzoomInstance.moveTo(0, 0);
-    state.panzoomInstance.zoomAbs(0, 0, 1);
-    
-    state.gameActive = true;
-    state.levelStartTime = Date.now();
+  S.map = L.map('map', {
+    crs: L.CRS.Simple,
+    minZoom: -3,  // allow zooming out enough to see whole image
+    maxZoom: 4,   // allow zooming in for detail
+    zoomSnap: 0.25,
+    zoomDelta: 0.5,
+    attributionControl: false,
+    zoomControl: false,
+    maxBounds: L.latLngBounds([0,0],[lv.h,lv.w]).pad(0.1),
+    maxBoundsViscosity: 0.8
+  });
+
+  // Use a single full image instead of tiles - more reliable
+  // The 4K images are served as the edited JPGs
+  const imgUrl = `images/edited/${getFilename(lv.id)}`;
+  L.imageOverlay(imgUrl, bounds).addTo(S.map);
+  S.map.fitBounds(bounds);
+
+  S.map.on('click', onMapClick);
+
+  setTimeout(()=>{
+    S.active=true;
+    S.startTime=Date.now();
     startTimer();
+  },500);
+}
+
+function getFilename(id) {
+  const map = {
+    oranjes: 'oranjes_4k.png',
+    nachtwacht: 'night_watch_4k.png',
+    banquet: 'george_iv_banquet_4k.png',
+    athens: 'school_athens_4k.png',
+    wedding: 'peasant_wedding_4k.png',
+    supper: 'last_supper_4k.png',
+    bar: 'bar_folies_4k.png'
   };
-  
-  img.src = level.image;
-  
-  // Setup click detection
-  img.onclick = handlePaintingClick;
+  return map[id];
 }
 
-function handlePaintingClick(e) {
-  if (!state.gameActive) return;
-  
-  const level = LEVELS[state.currentLevel];
-  const img = e.target;
-  const rect = img.getBoundingClientRect();
-  
-  // Get click position as percentage of image
-  const clickX = (e.clientX - rect.left) / rect.width;
-  const clickY = (e.clientY - rect.top) / rect.height;
-  
-  // Distance to Jeffrey
-  const dx = clickX - level.jeffreyX;
-  const dy = clickY - level.jeffreyY;
-  const dist = Math.sqrt(dx*dx + dy*dy);
-  
-  if (dist <= level.radius) {
-    // HIT!
-    foundJeffrey(e.clientX, e.clientY);
-  } else {
-    // MISS
-    showClickFeedback(e.clientX, e.clientY, 'miss');
-    state.timer = Math.max(0, state.timer - 2);
-    updateTimerDisplay();
-    // Vibrate briefly for miss
-    try { navigator.vibrate?.(50); } catch(e) {}
+function onMapClick(e){
+  if(!S.active)return;
+  const lv=LEVELS[S.level];
+  // CRS.Simple: latlng.lat = y from bottom, latlng.lng = x from left
+  const clickX = e.latlng.lng / lv.w;
+  const clickY = 1 - (e.latlng.lat / lv.h);  // convert to top-down percentage
+
+  const dx=clickX-lv.jx, dy=clickY-lv.jy;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  const pt=S.map.latLngToContainerPoint(e.latlng);
+  const mapRect=document.getElementById('map').getBoundingClientRect();
+
+  if(dist<=lv.r) hitJeffrey(e.latlng,pt,mapRect);
+  else missClick(pt,mapRect);
+}
+
+function missClick(pt,mr){
+  S.misses++;S.timer=Math.max(1,S.timer-3);updateTimer();sndMiss();
+  try{navigator.vibrate?.(50)}catch(e){}
+  const r=document.createElement('div');r.className='cr miss';
+  r.style.left=(mr.left+pt.x)+'px';r.style.top=(mr.top+pt.y)+'px';
+  document.body.appendChild(r);setTimeout(()=>r.remove(),500);
+}
+
+function hitJeffrey(ll,pt,mr){
+  S.active=false;clearInterval(S.interval);sndHit();
+  try{navigator.vibrate?.(200)}catch(e){}
+
+  const r=document.createElement('div');r.className='cr hit';
+  r.style.left=(mr.left+pt.x)+'px';r.style.top=(mr.top+pt.y)+'px';
+  document.body.appendChild(r);setTimeout(()=>r.remove(),800);
+
+  const lv=LEVELS[S.level];
+  const icon=L.divIcon({className:'jm',iconSize:[60,60],iconAnchor:[30,30]});
+  L.marker(ll,{icon}).addTo(S.map);
+
+  // Zoom in to Jeffrey
+  const targetZoom = Math.min(3, S.map.getZoom()+2);
+  S.map.flyTo(ll, targetZoom, {duration:1});
+
+  const elapsed=(Date.now()-S.startTime)/1000;
+  const tb=Math.max(0,Math.round(100-elapsed*2));
+  const hp=S.hintsUsed*-15, mp=S.misses*-5, nh=S.hintsUsed===0?10:0;
+  const sc=Math.max(5,tb+hp+mp+nh);
+  S.score+=sc;S.found++;
+  document.getElementById('hs').textContent=S.score;
+  document.getElementById('hf').textContent=S.found;
+
+  setTimeout(()=>{
+    document.getElementById('rs').textContent='+'+sc;
+    let b=`⏱ ${elapsed.toFixed(1)}s — tijdbonus: ${tb}`;
+    if(S.hintsUsed>0)b+=` | hints: ${hp}`;
+    if(S.misses>0)b+=` | foute klikken: ${mp}`;
+    if(nh)b+=` | geen hint bonus: +10`;
+    document.getElementById('rb').textContent=b;
+    document.getElementById('rf').textContent='💡 '+lv.fact;
+    show('reveal');
+  },1800);
+}
+
+function useHint(){
+  if(!S.active)return;
+  const lv=LEVELS[S.level];
+  S.hintsUsed++;
+  if(S.hintsUsed===1){
+    S.timer=Math.max(1,S.timer-10);updateTimer();
+    document.getElementById('htx').textContent=lv.hint;
+    document.getElementById('htx').style.display='';
+    document.getElementById('hb').textContent='💡 Hint 2 (-10s)';
+  } else if(S.hintsUsed===2){
+    S.timer=Math.max(1,S.timer-10);updateTimer();
+    document.getElementById('htx').textContent=lv.hint2;
+    document.getElementById('hb').disabled=true;
+    document.getElementById('hb').textContent='💡 Geen hints meer';
+    // Pan toward Jeffrey (with slight random offset)
+    const jLat=lv.h*(1-lv.jy), jLng=lv.w*lv.jx;
+    const off=lv.w*0.06;
+    S.map.flyTo(L.latLng(jLat+off*(Math.random()-.5),jLng+off*(Math.random()-.5)),Math.max(1,S.map.getZoom()+1),{duration:1.5});
   }
 }
 
-function showClickFeedback(x, y, type) {
-  const el = document.createElement('div');
-  el.className = `click-feedback ${type}`;
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 400);
-}
+function nextLevel(){S.level++;loadLevel()}
 
-function foundJeffrey(clickX, clickY) {
-  state.gameActive = false;
-  clearInterval(state.timerInterval);
-  
-  // Haptic
-  try { navigator.vibrate?.(200); } catch(e) {}
-  
-  // Show hit feedback
-  showClickFeedback(clickX, clickY, 'hit');
-  
-  // Show found marker on Jeffrey's position
-  const level = LEVELS[state.currentLevel];
-  const img = document.getElementById('painting-img');
-  const rect = img.getBoundingClientRect();
-  
-  const marker = document.createElement('div');
-  marker.className = 'found-marker';
-  const size = rect.width * level.radius * 2;
-  marker.style.width = size + 'px';
-  marker.style.height = size + 'px';
-  marker.style.left = (rect.left + level.jeffreyX * rect.width) + 'px';
-  marker.style.top = (rect.top + level.jeffreyY * rect.height) + 'px';
-  document.body.appendChild(marker);
-  
-  // Calculate score
-  const elapsed = (Date.now() - state.levelStartTime) / 1000;
-  const timeBonus = Math.max(0, Math.round(100 - elapsed * 2));
-  const hintPenalty = state.hintUsed ? -15 : 10;
-  const levelScore = Math.max(10, timeBonus + hintPenalty);
-  
-  state.totalScore += levelScore;
-  state.foundCount++;
-  
-  document.getElementById('score').textContent = state.totalScore;
-  document.getElementById('found-count').textContent = state.foundCount;
-  
-  // Show reveal after brief delay
-  setTimeout(() => {
-    document.getElementById('reveal-score').textContent = '+' + levelScore;
-    document.getElementById('reveal-breakdown').textContent = 
-      `Tijd: ${elapsed.toFixed(1)}s | Tijdbonus: ${timeBonus} | ${state.hintUsed ? 'Hint gebruikt: -15' : 'Geen hint: +10'}`;
-    document.getElementById('reveal-fact').textContent = level.funFact;
-    showScreen('reveal');
-  }, 1500);
-}
-
-function nextLevel() {
-  state.currentLevel++;
-  if (state.currentLevel >= LEVELS.length) {
-    endGame();
-  } else {
-    loadLevel();
-  }
-}
-
-function useHint() {
-  if (state.hintUsed || !state.gameActive) return;
-  state.hintUsed = true;
-  state.timer = Math.max(0, state.timer - 10);
-  updateTimerDisplay();
-  
-  const level = LEVELS[state.currentLevel];
-  const btn = document.getElementById('hint-btn');
-  btn.textContent = '💡 ' + level.hint;
-  btn.style.pointerEvents = 'none';
-  btn.style.opacity = '0.7';
-}
-
-// ===== TIMER =====
-function startTimer() {
-  state.timer = TIMERS[state.difficulty];
-  updateTimerDisplay();
-  
-  clearInterval(state.timerInterval);
-  state.timerInterval = setInterval(() => {
-    state.timer--;
-    updateTimerDisplay();
-    if (state.timer <= 0) {
-      clearInterval(state.timerInterval);
-      state.gameActive = false;
-      // Time's up — move to next
-      setTimeout(() => nextLevel(), 500);
+function startTimer(){
+  S.timer=TIMERS[S.diff];updateTimer();
+  clearInterval(S.interval);
+  S.interval=setInterval(()=>{
+    if(!S.active)return;
+    S.timer--;updateTimer();
+    if(S.timer<=10&&S.timer>0)sndUrg();
+    else if(S.timer>0)sndTick();
+    if(S.timer<=0){
+      clearInterval(S.interval);S.active=false;
+      document.getElementById('tut').textContent=LEVELS[S.level].title;
+      show('timeup');
     }
-  }, 1000);
+  },1000);
 }
 
-function updateTimerDisplay() {
-  const el = document.getElementById('timer');
-  el.textContent = Math.max(0, state.timer);
-  el.classList.toggle('urgent', state.timer <= 10);
+function updateTimer(){
+  const el=document.getElementById('ht');
+  el.textContent=Math.max(0,S.timer);
+  el.classList.toggle('urg',S.timer<=10);
 }
 
-// ===== END GAME =====
-function endGame() {
-  clearInterval(state.timerInterval);
-  if (state.panzoomInstance) { state.panzoomInstance.dispose(); state.panzoomInstance = null; }
-  
-  document.getElementById('end-total').textContent = state.totalScore;
-  document.getElementById('end-stats').innerHTML = 
-    `Schilderijen gevonden: ${state.foundCount} / ${LEVELS.length}<br>
-     Moeilijkheid: ${state.difficulty}<br>
-     ${state.totalScore > 400 ? '🏆 Meesterdetective!' : state.totalScore > 250 ? '🔍 Scherp oog!' : '👀 Blijf zoeken!'}`;
-  showScreen('end');
+function endGame(){
+  clearInterval(S.interval);
+  if(S.map){S.map.remove();S.map=null}
+  document.getElementById('esc').textContent=S.score;
+  let rk;
+  if(S.found===LEVELS.length&&S.score>500)rk='🏆 Meesterdetective!';
+  else if(S.found>=5)rk='🔍 Scherp oog!';
+  else if(S.found>=3)rk='👀 Je komt in de buurt...';
+  else rk='🫣 Jeffrey blijft ongrijpbaar';
+  document.getElementById('erk').textContent=rk;
+  document.getElementById('ess').innerHTML=`Schilderijen: ${S.found}/${LEVELS.length}<br>Moeilijkheid: ${S.diff}`;
+  show('end');
 }
 
-function shareScore() {
-  const text = `🔍 Waar is Jeffrey? — ${state.totalScore} punten!\n${state.foundCount}/${LEVELS.length} schilderijen gevonden.\nKun jij hem vinden?`;
-  if (navigator.share) {
-    navigator.share({ title: 'Waar is Jeffrey?', text });
-  } else if (navigator.clipboard) {
-    navigator.clipboard.writeText(text);
-    alert('Score gekopieerd naar klembord!');
-  }
+function shareScore(){
+  const t=`🔍 Waar is Jeffrey?\n${S.score} punten — ${S.found}/${LEVELS.length} schilderijen\nKun jij hem vinden?`;
+  if(navigator.share)navigator.share({title:'Waar is Jeffrey?',text:t});
+  else if(navigator.clipboard){navigator.clipboard.writeText(t);alert('Score gekopieerd!')}
 }
-
-// ===== TOUCH HANDLING =====
-// Prevent default double-tap zoom on mobile
-let lastTap = 0;
-document.addEventListener('touchend', (e) => {
-  const now = Date.now();
-  if (now - lastTap < 300) {
-    e.preventDefault();
-    // Double tap — zoom in on panzoom
-    if (state.panzoomInstance && state.gameActive) {
-      const touch = e.changedTouches[0];
-      state.panzoomInstance.zoomTo(touch.clientX, touch.clientY, 2);
-    }
-  }
-  lastTap = now;
-}, { passive: false });
 </script>
-
 </body>
 </html>
